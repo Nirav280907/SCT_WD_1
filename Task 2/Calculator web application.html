@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .calc-wrap {
+      width: 340px;
+      background: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+
+    .display {
+      background: #1c1c2e;
+      padding: 24px 20px 16px;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .expr {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      min-height: 18px;
+      word-break: break-all;
+      text-align: right;
+    }
+
+    .screen {
+      font-size: 40px;
+      font-weight: 300;
+      color: #ffffff;
+      word-break: break-all;
+      text-align: right;
+      line-height: 1.1;
+      min-height: 48px;
+      letter-spacing: -1px;
+    }
+
+    .screen.error {
+      font-size: 18px;
+      color: #ff6b6b;
+    }
+
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: #e5e5ea;
+    }
+
+    .key {
+      border: none;
+      background: #ffffff;
+      color: #1c1c2e;
+      font-size: 20px;
+      font-weight: 400;
+      font-family: inherit;
+      height: 72px;
+      cursor: pointer;
+      transition: background 0.1s, transform 0.08s;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .key:hover { background: #f2f2f7; }
+    .key:active { background: #e5e5ea; transform: scale(0.96); }
+    .key:focus-visible { box-shadow: 0 0 0 2px #7C6AF7 inset; }
+
+    .key.op {
+      color: #7C6AF7;
+      font-weight: 500;
+      background: #f9f8ff;
+    }
+    .key.op:hover { background: #eeecfe; }
+
+    .key.clear {
+      color: #ff3b30;
+      font-weight: 500;
+    }
+
+    .key.eq {
+      background: #7C6AF7;
+      color: #fff;
+      font-size: 26px;
+    }
+    .key.eq:hover { background: #6a59e0; }
+    .key.eq:active { background: #5a4ac8; transform: scale(0.96); }
+
+    .key.zero {
+      grid-column: span 2;
+      justify-content: flex-start;
+      padding-left: 28px;
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: #8e8e93;
+      padding: 10px 12px 14px;
+      background: #ffffff;
+      border-top: 1px solid #e5e5ea;
+    }
+  </style>
+</head>
+<body>
+
+<div class="calc-wrap">
+  <div class="display">
+    <div class="expr" id="expr"></div>
+    <div class="screen" id="screen">0</div>
+  </div>
+
+  <div class="keypad" id="keypad">
+    <button class="key clear" data-action="clear">AC</button>
+    <button class="key op"    data-action="sign">+/−</button>
+    <button class="key op"    data-action="percent">%</button>
+    <button class="key op"    data-action="op" data-val="÷">÷</button>
+
+    <button class="key" data-action="num" data-val="7">7</button>
+    <button class="key" data-action="num" data-val="8">8</button>
+    <button class="key" data-action="num" data-val="9">9</button>
+    <button class="key op" data-action="op" data-val="×">×</button>
+
+    <button class="key" data-action="num" data-val="4">4</button>
+    <button class="key" data-action="num" data-val="5">5</button>
+    <button class="key" data-action="num" data-val="6">6</button>
+    <button class="key op" data-action="op" data-val="−">−</button>
+
+    <button class="key" data-action="num" data-val="1">1</button>
+    <button class="key" data-action="num" data-val="2">2</button>
+    <button class="key" data-action="num" data-val="3">3</button>
+    <button class="key op" data-action="op" data-val="+">+</button>
+
+    <button class="key zero" data-action="num" data-val="0">0</button>
+    <button class="key" data-action="dot">.</button>
+    <button class="key eq"   data-action="equals">=</button>
+  </div>
+
+  <div class="hint">Keyboard supported &nbsp;·&nbsp; Enter = equals &nbsp;·&nbsp; Esc = clear</div>
+</div>
+
+<script>
+(function () {
+  const screen = document.getElementById('screen');
+  const expr   = document.getElementById('expr');
+
+  let current  = '0';
+  let operand  = null;
+  let operator = null;
+  let justCalc = false;
+  let exprStr  = '';
+
+  function fmt(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return String(n);
+    let s = parseFloat(n.toPrecision(12)).toString();
+    if (s.length > 12) s = parseFloat(n.toFixed(8)).toString();
+    return s;
+  }
+
+  function render() {
+    screen.textContent = current;
+    screen.classList.remove('error');
+    expr.textContent   = exprStr;
+  }
+
+  function renderError(msg) {
+    screen.textContent = msg;
+    screen.classList.add('error');
+    expr.textContent   = '';
+  }
+
+  function pressNum(v) {
+    if (justCalc) { current = '0'; exprStr = ''; justCalc = false; }
+    if (current === '0' && v !== '.') current = v;
+    else if (current.length < 13) current += v;
+    render();
+  }
+
+  function pressDot() {
+    if (justCalc) { current = '0'; exprStr = ''; justCalc = false; }
+    if (!current.includes('.')) current += '.';
+    render();
+  }
+
+  function pressOp(op) {
+    const val = parseFloat(current);
+    if (operator && !justCalc) {
+      const res = calculate(operand, val, operator);
+      if (res === null) return;
+      operand = res;
+      current = fmt(res);
+    } else {
+      operand = val;
+    }
+    operator = op;
+    exprStr  = fmt(operand) + ' ' + op;
+    justCalc = true;
+    render();
+  }
+
+  function calculate(a, b, op) {
+    if (op === '÷') {
+      if (b === 0) { renderError('Cannot divide by zero'); resetState(); return null; }
+      return a / b;
+    }
+    if (op === '×') return a * b;
+    if (op === '+') return a + b;
+    if (op === '−') return a - b;
+    return b;
+  }
+
+  function pressEquals() {
+    if (operator === null) return;
+    const val = parseFloat(current);
+    exprStr   = fmt(operand) + ' ' + operator + ' ' + fmt(val) + ' =';
+    const res = calculate(operand, val, operator);
+    if (res === null) return;
+    current   = fmt(res);
+    operator  = null;
+    operand   = null;
+    justCalc  = true;
+    render();
+  }
+
+  function pressSign() {
+    if (current === '0') return;
+    current = current.startsWith('-') ? current.slice(1) : '-' + current;
+    render();
+  }
+
+  function pressPercent() {
+    current = fmt(parseFloat(current) / 100);
+    render();
+  }
+
+  function resetState() {
+    current = '0'; operand = null; operator = null; justCalc = false; exprStr = '';
+  }
+
+  function pressClear() {
+    resetState();
+    screen.classList.remove('error');
+    render();
+  }
+
+  function pressBackspace() {
+    if (justCalc) { pressClear(); return; }
+    current = current.length > 1 ? current.slice(0, -1) : '0';
+    render();
+  }
+
+  document.getElementById('keypad').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { action, val } = btn.dataset;
+    if      (action === 'num')     pressNum(val);
+    else if (action === 'op')      pressOp(val);
+    else if (action === 'dot')     pressDot();
+    else if (action === 'equals')  pressEquals();
+    else if (action === 'clear')   pressClear();
+    else if (action === 'sign')    pressSign();
+    else if (action === 'percent') pressPercent();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (['0','1','2','3','4','5','6','7','8','9'].includes(e.key)) pressNum(e.key);
+    else if (e.key === '.')                        pressDot();
+    else if (e.key === '+')                        pressOp('+');
+    else if (e.key === '-')                        pressOp('−');
+    else if (e.key === '*')                        pressOp('×');
+    else if (e.key === '/') { e.preventDefault(); pressOp('÷'); }
+    else if (e.key === '%')                        pressPercent();
+    else if (e.key === 'Enter' || e.key === '=')   pressEquals();
+    else if (e.key === 'Backspace')                pressBackspace();
+    else if (e.key === 'Escape')                   pressClear();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
